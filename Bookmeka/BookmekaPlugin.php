@@ -17,9 +17,10 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   protected $_hooks = array(
     'admin_head', 
     'after_save_item', 
+    'before_delete_file',
     'before_delete_item',
-    'before_save_item', 
     'before_save_file', 
+    'before_save_item', 
     'config',
     'config_form',
     'initialize', 
@@ -42,6 +43,8 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   protected $_xsl;
   /** an array to add metadatas from files */
   protected $_metas = array();
+  /** an array of files to delete after save item */
+  protected $_files2delete = array();
 
   // protected $_filters = array('admin_navigation_main');
 
@@ -79,6 +82,13 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
   {
     $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
     if(!file_exists($this->_tmpdir)) mkdir($this->_tmpdir, null, true);
+    // register some icons for file type
+    add_file_fallback_image("application/vnd.oasis.opendocument.text", "fallback-odt.png");
+    add_file_fallback_image("application/tei+xml", "fallback-tei.png");
+    add_file_fallback_image("application/epub+zip", "fallback-epub.png");
+    add_file_fallback_image("text/html", "fallback-html.png");
+    add_file_fallback_image("text/markdown", "fallback-md.png");
+    add_file_fallback_image("text/vnd.iramuteq", "fallback-iramuteq.png");
     // inialize an XSLTProcessor
     $this->_trans = new XSLTProcessor();
     $this->_trans->registerPHPFunctions();
@@ -105,26 +115,71 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
   public function hookBeforeSaveFile($args)
   {
     if (!$args['insert']) return;
+    
+    // catch here some extension to change mime/type, impossible before when file is added
+    $extension = $args['record']->getExtension();
+    if ($extension == 'md') {
+      $args['record']->mime_type = "text/markdown";
+      return;
+    }
+    if ($extension == 'txt') {
+      $magic = file_get_contents($args['record']->getPath(), false, null, -1, 4096);
+      if (strpos($magic, '****')===false) return; // not Iramuteq, nothing todo here
+      $args['record']->mime_type = "text/vnd.iramuteq";
+      return;
+    }
+    
+    $filename = pathinfo($args['record']->original_filename, PATHINFO_FILENAME); // filename without extension
     $item = $args['record']->getItem();
+    
     // an odt file submitted, create XML/TEI version
-    if ($args['record']['mime_type'] == "application/vnd.oasis.opendocument.text" || $args['record']->getExtension() == 'odt') {
+    if ($args['record']['mime_type'] == "application/vnd.oasis.opendocument.text" || $extension == 'odt') {
       $odt=new Odette_Odt2tei($args['record']->getPath());
-      $destfile = $this->_tmpdir . pathinfo($args['record']->original_filename, PATHINFO_FILENAME) . '.xml';
-      _log($args['record']->getPath().' > '.$destfile);
+      $destfile = $this->_tmpdir . $filename . '.xml';
+      _log('Bookmeka, item #'.$item->id.' '.$args['record']->getPath().' > '.$destfile, Zend_Log::INFO);
+      // loop on file of item, replace ones with the same name and extension
+      $exts = array("odt"=>true);
+      foreach($item->Files as $key=>$file) {
+        $pathinfo = pathinfo($file['original_filename']);
+        if($pathinfo['filename'] != $filename) continue;
+        if(!isset($exts[$pathinfo['extension']])) continue;
+        // do not delete here, delete after save
+        $this->_files2delete[] = $file;
+      }
+
+      
       if (file_exists($destfile)) unlink($destfile); // if repost, delete now
       $odt->save($destfile, "tei");
       insert_files_for_item($item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp xml file
       // the xml file will recall this hook
       return;
     }
+    
     // an xml file, if TEI, work
-    if (isset($this->_mimetei[$args['record']['mime_type']]) || 'xml' == $args['record']->getExtension()) {
+    if (isset($this->_mimetei[$args['record']->mime_type]) || 'xml' == $args['record']->getExtension()) {
       $magic = file_get_contents($args['record']->getPath(), false, null, -1, 4096);
-      if (strpos($magic, '<TEI')===false) return;
+      if (strpos($magic, '<TEI')===false) return; // not TEI, nothing todo here
+      $args['record']->mime_type = "application/tei+xml";
+      
+      // loop on the file of item and delete the ones we will generate here
+      $exts = array("epub"=>true, "html"=>true, "md"=>true, "txt"=>true, "xml"=>true);
+      foreach($item->Files as $key=>$file) {
+        $pathinfo = pathinfo($file['original_filename']);
+        if($pathinfo['filename'] != $filename) continue;
+        if(!isset($exts[$pathinfo['extension']])) continue;
+        // do not delete here, delete after save
+        $this->_files2delete[] = $file;
+      }
+      
       // load TEI as dom
       $doc = new DOMDocument("1.0", "UTF-8");
       $doc->load($args['record']->getPath(), LIBXML_NOENT | LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NSCLEAN);
+      $doc->preserveWhiteSpace = false;
+      $doc->formatOutput = true; // allow correct indentation
+
       
+      // load metadata
       $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2dc.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $dc=$this->_trans->transformToDoc($doc);
@@ -134,44 +189,68 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
         $html = trim(preg_replace('@^<[^>]+>(.*)</[^>]+>$@s', "$1", trim($html)));
         // get Element id
         $element = $item->getElement(self::DC, ucfirst($el->localName));
-        // unknown property for Omeka, be nice, log it 
+        // unknown property for Omeka, be nice, log it (which level ? DEBUG ?)
         if (!$element) {
-          _log($item->getOriginalFileName().' '.$el->tagName.' '.$html);
+          _log('Bookmeka, item #'.$item->id.' '.$args['record']->original_filename.' '.$el->tagName.' '.$html, Zend_Log::INFO);
           continue;
         }
         if (!isset($this->_metas[$element['id']])) $this->_metas[$element['id']] = array();
         $this->_metas[$element['id']][] = $html;
       }
+      // epub
+      $destfile = $this->_tmpdir . $filename . '.epub';
+      _log('Bookmeka, item #'.$item->id.' '.$args['record']->getPath().' > '.$destfile, Zend_Log::INFO);
+      $livre = new Livrable_Tei2epub($doc); 
+      $livre->epub($destfile);
+      insert_files_for_item($item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp xml file
+
+      // transform to html one file
+      $destfile = $this->_tmpdir . $filename . '.html';
+      _log('Bookmeka, item #'.$item->id.' '.$args['record']->getPath().' > '.$destfile, Zend_Log::INFO);
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2html.xsl');
+      $this->_trans->importStyleSheet($this->_xsl);
+      $this->_trans->transformToUri($doc, $destfile);
+      insert_files_for_item($item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp file
+
+      // markdown
+      $destfile = $this->_tmpdir . $filename . '.md';
+      _log('Bookmeka, item #'.$item->id.' '.$args['record']->getPath().' > '.$destfile, Zend_Log::INFO);
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2txt.xsl');
+      $this->_trans->importStyleSheet($this->_xsl);
+      $this->_trans->transformToUri($doc, $destfile);
+      insert_files_for_item($item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp file
+
+      // iramuteq
+      $destfile = $this->_tmpdir . $filename . '.txt';
+      _log('Bookmeka, item #'.$item->id.' '.$args['record']->getPath().' > '.$destfile, Zend_Log::INFO);
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2txt.xsl');
+      $this->_trans->importStyleSheet($this->_xsl);
+      $this->_trans->setParameter(null, 'mode', 'iramuteq');
+      $this->_trans->transformToUri($doc, $destfile);
+      insert_files_for_item( $item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp file
+      
+      
       return;
     }
-    _log(json_encode($args, JSON_PRETTY_PRINT));
+  }
+  /**
+   * If a file deleted
+   * When item is deleted, all files will be deleted
+   * 
+   */
+  public function hookBeforeDeleteFile($args) {
+    
+    
   }
   /**
    */
   public function hookBeforeSaveItem($args)
   {
-    $item = $args['record'];
-    //_log(json_encode($item, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
-    // _log(json_encode($item, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
-    // _log(json_encode($record, JSON_PRETTY_PRINT));
-    // _log(get_class($args['record']));
-    // _log(json_encode($args['record']->getFiles(), JSON_PRETTY_PRINT));
-      // _log("before item->Files ".print_r($item->_FILES, true));
-      // _log(print_r($post, true));
-      // _log(print_r($insert, true));
-
-    // Work on file insert only ? What about file update ?
-    // if (!$insert) return;
-    
-    /* ??
-      $text = new ElementText;
-      $text->record_id = $item->id;
-      $text->element_id = $element->id;
-      $text->record_type_id = $recordTypeId;
-      $text->text = $textToc;
-      $text->html = false;
-      $text->save();
-    */
+    // $item = $args['record'];
   }
   /**
    * After save
@@ -181,12 +260,10 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
   function hookAfterSaveItem($args)
   {
     $item = $args['record'];
-    _log(print_r($this->_metas, true));
     if (count($this->_metas)) {
       $item->deleteElementTextsByElementId(array_keys($this->_metas));
       foreach($this->_metas as $key => $values) {
         $element = $item->getElementById($key);
-        // _log(json_encode($element, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
         if (!is_array($values)) continue;
         foreach ($values as $val) {
           $prop = new ElementText;
@@ -196,14 +273,15 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
           $prop->text = $val;
           $prop->html = true;
           $prop->save();
-          // $item->addTextForElement($element, $val, true);
         }
       }
     }
     $this->_metas = array();
+    foreach ($this->_files2delete as $file) $file->delete();
+    $this->_files2delete = array();
   }
   /**
-   * On item deletion, delete the generated HTML subitems
+   * On item deletion (or on TEI file deletion ?), delete the generated HTML subitems
    */
   function hookBeforeDeleteItem($item)
   {
@@ -217,18 +295,6 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
     }
     */
   }
-  /* Maybe an idea
-  function defineAcl($acl)
-  {
-    $acl->loadResourceList(array(
-      'TeiDisplay_Config' => array(
-        'browse',
-        'status'
-      )
-    ));
-  }
-  */
-
 
   function hookConfigForm()
   {
@@ -250,6 +316,7 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
 
   /**
    * Configuration
+   * TODO, a job to regenerate file on odt or TEI
    */
   function hookConfig()
   {
@@ -273,6 +340,6 @@ DROP TABLE IF EXISTS `{$db->prefix}{self::TABLE}`
    * Show item, table of contents, and subitems
    */
   function hookPublicItemsShow($args) {
-    echo "PublicItemsShow";
+    // echo "PublicItemsShow";
   }
 }
