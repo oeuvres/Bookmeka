@@ -13,7 +13,12 @@
 class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   const TABLE = 'bookmekas'; // Omeka force table name to have an 's', or you can't use their layer
   protected $_table;
-  const DC = "Dublin Core";
+  const TYPE_EPUB = "application/epub+zip";
+  const TYPE_HTML = "text/html";
+  const TYPE_IRAMUTEQ = "text/vnd.iramuteq";
+  const TYPE_ODT = "application/vnd.oasis.opendocument.text";
+  const TYPE_TEI = "application/tei+xml";
+  const TYPE_MD = "text/markdown";
   protected $_tmpdir;
   protected $_hooks = array(
     'admin_head', 
@@ -93,12 +98,13 @@ DROP TABLE IF EXISTS `{$this->_table}`
       @chmod($this->_tmpdir, 0775);
     }
     // register some icons for file type
-    add_file_fallback_image("application/vnd.oasis.opendocument.text", "fallback-odt.png");
-    add_file_fallback_image("application/tei+xml", "fallback-tei.png");
-    add_file_fallback_image("application/epub+zip", "fallback-epub.png");
-    add_file_fallback_image("text/html", "fallback-html.png");
-    add_file_fallback_image("text/markdown", "fallback-md.png");
-    add_file_fallback_image("text/vnd.iramuteq", "fallback-iramuteq.png");
+    add_file_fallback_image(self::TYPE_ODT, "fallback-odt.png");
+    add_file_fallback_image(self::TYPE_TEI, "fallback-tei.png");
+    add_file_fallback_image(self::TYPE_EPUB, "fallback-epub.png");
+    add_file_fallback_image(self::TYPE_HTML, "fallback-html.png");
+    add_file_fallback_image(self::TYPE_MD, "fallback-md.png");
+    add_file_fallback_image(self::TYPE_IRAMUTEQ, "fallback-iramuteq.png");
+    add_file_display_callback(array(self::TYPE_ODT, self::TYPE_TEI, self::TYPE_EPUB, self::TYPE_HTML, self::TYPE_MD, self::TYPE_IRAMUTEQ), array($this, 'fileDisplay')); 
     // inialize an XSLTProcessor
     $this->_trans = new XSLTProcessor();
     $this->_trans->registerPHPFunctions();
@@ -111,6 +117,15 @@ DROP TABLE IF EXISTS `{$this->_table}`
     else ini_set("xsl.security_prefs",  $prefs);
     $this->_xsl = new DOMDocument();
   }
+  public function fileDisplay($file, $options=array(), $wrapperAttributes = array()) {
+    // _log('fileDisplay');
+    // echo( '<pre>'.json_encode($file, JSON_PRETTY_PRINT).'</pre>');
+    $url = file_display_url($file, $format='original');
+    $extension = $file->getExtension();
+    if ($file->mime_type == self::TYPE_TEI) $extension = "tei";
+    echo ' <a class="bookmeka-file " target="_new" href="'.$url.'" title="'.$file->original_filename.'">'.$file->getExtension().'</a> ';
+  }
+  
   /**
    * Work on inserted TEI file
    * Extract metadata from the first XML/TEI file to populate properties of item
@@ -132,20 +147,20 @@ DROP TABLE IF EXISTS `{$this->_table}`
     // catch here some extension to change mime/type, impossible before when file is added
 
     if ($extension == 'md') {
-      $file->mime_type = "text/markdown";
+      $file->mime_type = self::TYPE_MD;
       return;
     }
     if ($extension == 'txt') {
       $magic = file_get_contents($file->getPath(), false, null, -1, 4096);
       if (strpos($magic, '****')===false) return; // not Iramuteq, nothing todo here
-      $file->mime_type = "text/vnd.iramuteq";
+      $file->mime_type = self::TYPE_IRAMUTEQ;
       return;
     }
     
     $filename = pathinfo($file->original_filename, PATHINFO_FILENAME); // filename without extension
     
     // an odt file submitted, create XML/TEI version
-    if ($file->mime_type == "application/vnd.oasis.opendocument.text" || $extension == 'odt') {
+    if ($file->mime_type == self::TYPE_ODT || $extension == 'odt') {
       $odt=new Odette_Odt2tei($file->getPath());
       $destfile = $this->_tmpdir . $filename . '.xml';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
@@ -173,7 +188,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       
       $magic = file_get_contents($file->getPath(), false, null, -1, 4096);
       if (strpos($magic, '<TEI')===false) return; // not TEI, nothing todo here
-      $file->mime_type = "application/tei+xml";
+      $file->mime_type = self::TYPE_TEI;
       
       
       // loop on the file of item and delete the ones we will generate here

@@ -5,9 +5,8 @@ An Omeka plugin for books (odt, tei, epub)
 
 ## Install
 
-Admin / Settings / Security / Disable File Upload Validation
-
-// ? maximum file size is 512 MB.
+[client] Admin / Settings / Security / Disable File Upload Validation
+[file] application/config/config.ini uncomment upload.maxFileSize = "10M"
 
 ## Roadmap
 
@@ -21,8 +20,9 @@ Admin / Settings / Security / Disable File Upload Validation
    - public display
  - TODO
    - collect huma-num clients needs and request
-   - prototype to production
-   - url routes
+   - id policy and url routes
+   - better graphic integrations in Omeka themes
+   - omeka images in TEI
    - support for images from odt files
    - support for images from zipped tei
    - batch regeneration

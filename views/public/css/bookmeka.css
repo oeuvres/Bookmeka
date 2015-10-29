@@ -22,12 +22,13 @@ div.element { margin-bottom: 0; }
 div.element h3 { float: left; margin: 0 !important; padding-top: 0; }
 div.element .element-text { float: left; }
 
-#item-images { display: none;  }
+#item-images { float: right;  }
 #item-images div.item-file {  }
-div.item-file a { border-bottom: none; }
+a.bookmeka-file { border-bottom: none; font-size: 150%; padding: 0.1ex 1ex ; }
+a.bookmeka-file:hover { color: #000000; background: #EEE; }
 #item-citation { display: none; }
 
-li.here {background-color: #FAFAFA}
+li.here {background-color: #FAFAFA; }
 
 h1 { text-transform: none !important; }
 p.p { margin: 0; }
