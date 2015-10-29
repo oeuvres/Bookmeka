@@ -1,0 +1,47 @@
+/**
+ * LGPL
+ * © 2016, frederic.glorieux@fictif.org et Huma-Num
+ *
+ * This program is a free software: you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License 
+ * http://www.gnu.org/licenses/lgpl.html
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of 
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ *
+ *
+ *  Specific presentation for Bookmeka chapters
+ *
+ */
+
+#primary > h1 { display: none; }
+#primary > h3 { display: none; }
+#item-metadata { display: none; }
+div.element-set h2 { display: none; }
+div.element { margin-bottom: 0; }
+div.element h3 { float: left; margin: 0 !important; padding-top: 0; }
+div.element .element-text { float: left; }
+
+#item-images { display: none;  }
+#item-images div.item-file {  }
+div.item-file a { border-bottom: none; }
+#item-citation { display: none; }
+
+li.here {background-color: #FAFAFA}
+
+h1 { text-transform: none !important; }
+p.p { margin: 0; }
+article.tei { font: 16px/24px Georgia,"Bitstream Vera Serif",Times,serif; }
+article.tei, article.text { margin-left: 250px; }
+nav.toc { width: 220px; position: absolute; top: 70px;}
+nav.toc header { display: none; } /* TODO */
+
+/* mime type classes do no work with dots and +
+div.item-file a { display: block; width: 200px; height: 200px; }
+div.application-epub+zip a { background-image: url("../../shared/images/fallback-epub.png"); }
+div.text-html a { background-image: url("../../shared/images/fallback-html.png"); }
+div.text-markdown a { background-image: url("../../shared/images/fallback-md.png"); }
+div.application-vnd-oasis-opendocument-text a { background-image: url("../../shared/images/fallback-odt.png"); }
+div.application-tei+xml a { background-image: url("../../shared/images/fallback-tei.png"); }
+div.text-vnd-iramuteq a { background-image: url("../../shared/images/fallback-iramuteq.png"); }
+*/
