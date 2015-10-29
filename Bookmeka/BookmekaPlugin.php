@@ -88,7 +88,10 @@ DROP TABLE IF EXISTS `{$this->_table}`
   {
     $this->_table = $this->_db->prefix.self::TABLE;
     $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
-    if(!file_exists($this->_tmpdir)) mkdir($this->_tmpdir, null, true);
+    if(!file_exists($this->_tmpdir)) {
+      mkdir($this->_tmpdir, 0775, true);
+      @chmod($this->_tmpdir, 0775);
+    }
     // register some icons for file type
     add_file_fallback_image("application/vnd.oasis.opendocument.text", "fallback-odt.png");
     add_file_fallback_image("application/tei+xml", "fallback-tei.png");
@@ -261,7 +264,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       foreach(scandir($destdir) as $f) {
         if ($f[0] == '.') continue;
         $section = pathinfo($f, PATHINFO_FILENAME);
-        $html = file_get_contents($f);
+        $html = file_get_contents($destdir.$f);
         $db->insert(
           $this->_table, 
           array(
@@ -272,9 +275,9 @@ DROP TABLE IF EXISTS `{$this->_table}`
             "html" => $html,
           )
         );
-        unlink($f); // delete file now
+        // unlink($destdir.$f); // delete file now
       }
-      rmdir($destdir);
+      // rmdir($destdir);
       
       
       return;
@@ -370,13 +373,26 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookPublicHead($request)
   {
     queue_css_file('html');
+    queue_css_file('bookmeka');
     queue_js_file('Tree');
+    queue_js_file('bookmeka');
   }
   /**
    * Show item, table of contents, and subitems
    */
   function hookPublicItemsShow($args) {
-    echo "<pre>".json_encode($args, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "</pre>";
-    echo "COUCOU !";
+    $db = $this->_db;
+    $item = $args['item'];
+    $itemid = $db->quote($item->id);
+    $section = @$_REQUEST['section'];
+    if (!$section) $section = 'index';
+    $section = $db->quote($section);
+    $toc = $db->quote('toc');
+    $sql = "SELECT * FROM {$this->_table} WHERE item = $itemid AND (section = $section OR section = $toc)";
+    $result = $db->query($sql);
+    while ($row = $result->fetch()) {
+      echo $row['html'];
+    }
+     
   }
 }
