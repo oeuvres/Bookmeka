@@ -19,6 +19,7 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   const TYPE_ODT = "application/vnd.oasis.opendocument.text";
   const TYPE_TEI = "application/tei+xml";
   const TYPE_MD = "text/markdown";
+  const DC = "Dublin Core";
   protected $_tmpdir;
   protected $_hooks = array(
     'admin_head', 
@@ -92,6 +93,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookInitialize()
   {
     $this->_table = $this->_db->prefix.self::TABLE;
+    // TODO configure tmp dir
     $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
     if(!file_exists($this->_tmpdir)) {
       mkdir($this->_tmpdir, 0775, true);
@@ -216,6 +218,11 @@ DROP TABLE IF EXISTS `{$this->_table}`
       foreach ($dc->documentElement->childNodes as $el) {
         $html = $el->ownerDocument->saveXML($el);
         $html = trim(preg_replace('@^<[^>]+>(.*)</[^>]+>$@s', "$1", trim($html)));
+        // bug, text node
+        if (!$el->localName) {
+          _log('Bookmeka, item #'.$item->id.' '.$file->original_filename. ' <???> '.$html, Zend_Log::INFO);
+          continue;
+        }
         // get Element id
         $element = $item->getElement(self::DC, ucfirst($el->localName));
         // unknown property for Omeka, be nice, log it (which level ? DEBUG ?)
@@ -281,7 +288,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
         $section = pathinfo($f, PATHINFO_FILENAME);
         $html = file_get_contents($destdir.$f);
         $db->insert(
-          $this->_table, 
+          self::TABLE, 
           array(
             "item" => $item->id,
             "file" => $file->id,
