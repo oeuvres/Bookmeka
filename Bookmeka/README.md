@@ -5,8 +5,13 @@ An Omeka plugin for books (odt, tei, epub)
 
 ## Install
 
-[client] Admin / Settings / Security / Disable File Upload Validation
-[file] application/config/config.ini uncomment upload.maxFileSize = "10M"
+interface: Admin / Settings / Security / Disable File Upload Validation
+file: application/config/config.ini uncomment upload.maxFileSize = "10M"
+
+## Configuration params (TODO)
+
+ * tmp dir where to write producted files
+ * 
 
 ## Roadmap
 
@@ -19,19 +24,19 @@ An Omeka plugin for books (odt, tei, epub)
    - tei > toc and html fragments
    - public display
  - TODO
-   - collect huma-num clients needs and request
+   - collect Consortium CAHIER needs and requests
    - id policy and url routes
-   - better graphic integrations in Omeka themes
-   - omeka images in TEI
+   - better graphic integration with Omeka themes
+   - omeka item images in TEI
+   - validation report and online help for metas
    - support for images from odt files
    - support for images from zipped tei
    - batch regeneration
-   - plugin options (export formats, 
+   - plugin options (ex: export formats) 
    - mechanism to extend TEI suppport
    - CsvImport of tei, odt, epub 
    - default search engine
-   - ODD for TEI supported
- - MAYDO
+  - MAYDO
    - epub ingestion
    - advanced search engine with lemmas
 
