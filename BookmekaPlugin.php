@@ -94,7 +94,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
   {
     $this->_table = $this->_db->prefix.self::TABLE;
     // TODO configure tmp dir
-    $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
+    $this->_tmpdir = rtrim(get_option('bookmeka_tmpdir'), '/\\').'/';
+    if (!$this->_tmpdir) $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
     if(!file_exists($this->_tmpdir)) {
       mkdir($this->_tmpdir, 0775, true);
       @chmod($this->_tmpdir, 0775);
@@ -359,20 +360,20 @@ DROP TABLE IF EXISTS `{$this->_table}`
 
   function hookConfigForm()
   {
-    /* TODO include form from external file 
-    echo get_view()->partial(
-            'form.php'
-        );
-    */
-  ?>
-      <div class="field">
-          <h3>Bookmeka</h3>
-          <p>Books for Omeka</p>
-          <?
-    echo $form;
-  ?>
-     </div>
-  <?php
+    echo '<div class="field">'."\n";
+    echo '<p class="explanation">'.__(
+      'Give an alternate tmp dir for generated contents.'
+    )."</p>\n";
+    echo '<label for="bookmeka_tmpdir">'.__('Temp directory')."</label>\n";
+    echo get_view()->formText('bookmeka_tmpdir', get_option('bookmeka_tmpdir'));
+    echo "</div>\n";
+    echo '<div class="field">'."\n";
+    echo '<p class="explanation">'.__(
+      'For short items like letters or articles (not books), change default policy of multi-pages.'
+    )."</p>\n";
+    echo '<label for="bookmeka_singlepage">'.__('Single page')."</label>\n";
+    echo get_view()->formCheckbox('bookmeka_singlepage', true, array('checked'=>(boolean)get_option('bookmeka_singlepage')));
+    echo "</div>\n";
   }
 
   /**
@@ -382,8 +383,26 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookConfig()
   {
     // Run the text extraction process if directed to do so.
+    /*
     if ($_POST['tei_job'] ) {
       Zend_Registry::get('bootstrap')->getResource('jobs')->sendLongRunning('TeiJob');
+    }
+    */
+    if (!isset($_POST['bookmeka_tmpdir']));
+    // empty value, delete prop
+    else if (!$_POST['bookmeka_tmpdir']) {
+      delete_option('bookmeka_tmpdir');
+    }
+    else {
+      set_option('bookmeka_tmpdir', trim($_POST['bookmeka_tmpdir']));
+    }
+    if (!isset($_POST['bookmeka_singlepage']));
+    // empty value, delete prop
+    else if (!$_POST['bookmeka_singlepage']) {
+      delete_option('bookmeka_singlepage');
+    }
+    else {
+      set_option('bookmeka_singlepage', (boolean)$_POST['bookmeka_singlepage']);
     }
   }
 
