@@ -13,12 +13,17 @@
 class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   const TABLE = 'bookmekas'; // Omeka force table name to have an 's', or you can't use their layer
   protected $_table;
-  const TYPE_EPUB = "application/epub+zip";
-  const TYPE_HTML = "text/html";
-  const TYPE_IRAMUTEQ = "text/vnd.iramuteq";
-  const TYPE_ODT = "application/vnd.oasis.opendocument.text";
-  const TYPE_TEI = "application/tei+xml";
-  const TYPE_MD = "text/markdown";
+  const MIME_EPUB = "application/epub+zip";
+  const MIME_HTML = "text/html";
+  const MIME_IRAMUTEQ = "text/vnd.iramuteq";
+  const MIME_ODT = "application/vnd.oasis.opendocument.text";
+  const MIME_TEI = "application/tei+xml";
+  const MIME_MD = "text/markdown";
+  const LETTER_NAME = "Letter";
+  const LETTER_DESCRIPTION = "Text item in a correspondance";
+  const ARTICLE_NAME = "Article";
+  const ARTICLE_DESCRIPTION = "Text item in one page";
+  
   const DC = "Dublin Core";
   protected $_tmpdir;
   protected $_hooks = array(
@@ -65,12 +70,30 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
       throw new Exception('Unable to access XSLTProcessor class.  Make sure the php-xsl package is installed.');
       return;
     }
+    // Insert different types of Items (to adjust output)
+    if(!get_record('ItemType', self::LETTER_NAME)){
+      insert_item_type(
+        array(
+          'name'=> self::LETTER_NAME,
+          'description' => self::LETTER_DESCRIPTION,
+        )
+      );
+    }
+    if(!get_record('ItemType', self::ARTICLE_NAME)){
+      insert_item_type(
+        array(
+          'name'=> self::ARTICLE_NAME,
+          'description' => self::ARTICLE_DESCRIPTION,
+        )
+      );
+    }
     $db->query("
 CREATE TABLE IF NOT EXISTS `{$this->_table}` (
   id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, -- auto id for subitems
   item INT(10) UNSIGNED,  -- omeka id of item
   file INT(10) UNSIGNED,  -- omeka id of source file in item
   filename VARCHAR(200),  -- filename of book, should be unique for collection
+  type VARCHAR(200),      -- type of resource
   section VARCHAR(200),   -- id of section in file
   html LONGBLOB,          -- html to display for section
   PRIMARY KEY  (id),
@@ -93,7 +116,6 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookInitialize()
   {
     $this->_table = $this->_db->prefix.self::TABLE;
-    // TODO configure tmp dir
     $this->_tmpdir = rtrim(get_option('bookmeka_tmpdir'), '/\\').'/';
     if (!$this->_tmpdir) $this->_tmpdir = sys_get_temp_dir().'/bookmeka/';
     if(!file_exists($this->_tmpdir)) {
@@ -101,13 +123,13 @@ DROP TABLE IF EXISTS `{$this->_table}`
       @chmod($this->_tmpdir, 0775);
     }
     // register some icons for file type
-    add_file_fallback_image(self::TYPE_ODT, "fallback-odt.png");
-    add_file_fallback_image(self::TYPE_TEI, "fallback-tei.png");
-    add_file_fallback_image(self::TYPE_EPUB, "fallback-epub.png");
-    add_file_fallback_image(self::TYPE_HTML, "fallback-html.png");
-    add_file_fallback_image(self::TYPE_MD, "fallback-md.png");
-    add_file_fallback_image(self::TYPE_IRAMUTEQ, "fallback-iramuteq.png");
-    add_file_display_callback(array(self::TYPE_ODT, self::TYPE_TEI, self::TYPE_EPUB, self::TYPE_HTML, self::TYPE_MD, self::TYPE_IRAMUTEQ), array($this, 'fileDisplay')); 
+    add_file_fallback_image(self::MIME_ODT, "fallback-odt.png");
+    add_file_fallback_image(self::MIME_TEI, "fallback-tei.png");
+    add_file_fallback_image(self::MIME_EPUB, "fallback-epub.png");
+    add_file_fallback_image(self::MIME_HTML, "fallback-html.png");
+    add_file_fallback_image(self::MIME_MD, "fallback-md.png");
+    add_file_fallback_image(self::MIME_IRAMUTEQ, "fallback-iramuteq.png");
+    add_file_display_callback(array(self::MIME_ODT, self::MIME_TEI, self::MIME_EPUB, self::MIME_HTML, self::MIME_MD, self::MIME_IRAMUTEQ), array($this, 'fileDisplay')); 
     // inialize an XSLTProcessor
     $this->_trans = new XSLTProcessor();
     $this->_trans->registerPHPFunctions();
@@ -122,10 +144,10 @@ DROP TABLE IF EXISTS `{$this->_table}`
   }
   public function fileDisplay($file, $options=array(), $wrapperAttributes = array()) {
     // _log('fileDisplay');
-    // echo( '<pre>'.json_encode($file, JSON_PRETTY_PRINT).'</pre>');
+    // echo( '<pre>'.json_encode($file, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE).'</pre>');
     $url = file_display_url($file, $format='original');
     $extension = $file->getExtension();
-    if ($file->mime_type == self::TYPE_TEI) $extension = "tei";
+    if ($file->mime_type == self::MIME_TEI) $extension = "tei";
     echo ' <a class="bookmeka-file " target="_new" href="'.$url.'" title="'.$file->original_filename.'">'.$file->getExtension().'</a> ';
   }
   
@@ -142,28 +164,30 @@ DROP TABLE IF EXISTS `{$this->_table}`
    */
   public function hookBeforeSaveFile($args)
   {
-    if (!$args['insert']) return;
+    if (!$args['insert']) return; // hook can fire with no file
     $file = $args['record'];
     $item = $file->getItem();
     $extension = $file->getExtension();
-    
+    $type = $item->getItemType()->name;
+    $db = $this->_db;
+    // _log(json_encode($item->getItemType(), JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
     // catch here some extension to change mime/type, impossible before when file is added
 
     if ($extension == 'md') {
-      $file->mime_type = self::TYPE_MD;
+      $file->mime_type = self::MIME_MD;
       return;
     }
     if ($extension == 'txt') {
       $magic = file_get_contents($file->getPath(), false, null, -1, 4096);
       if (strpos($magic, '****')===false) return; // not Iramuteq, nothing todo here
-      $file->mime_type = self::TYPE_IRAMUTEQ;
+      $file->mime_type = self::MIME_IRAMUTEQ;
       return;
     }
     
     $filename = pathinfo($file->original_filename, PATHINFO_FILENAME); // filename without extension
     
     // an odt file submitted, create XML/TEI version
-    if ($file->mime_type == self::TYPE_ODT || $extension == 'odt') {
+    if ($file->mime_type == self::MIME_ODT || $extension == 'odt') {
       $odt=new Odette_Odt2tei($file->getPath());
       $destfile = $this->_tmpdir . $filename . '.xml';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
@@ -191,7 +215,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       
       $magic = file_get_contents($file->getPath(), false, null, -1, 4096);
       if (strpos($magic, '<TEI')===false) return; // not TEI, nothing todo here
-      $file->mime_type = self::TYPE_TEI;
+      $file->mime_type = self::MIME_TEI;
       
       
       // loop on the file of item and delete the ones we will generate here
@@ -235,13 +259,18 @@ DROP TABLE IF EXISTS `{$this->_table}`
         $this->_metas[$element['id']][] = $html;
       }
       
-       // epub
-      $destfile = $this->_tmpdir . $filename . '.epub';
-      $livre = new Livrable_Tei2epub($doc); 
-      $livre->epub($destfile);
-      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      insert_files_for_item($item, 'Filesystem', $destfile);
-      unlink($destfile); // delete tmp epub file
+      // epub
+      $epub = true;
+      if ($type == self::LETTER_NAME) $epub = false; // no epub for letters
+      if ($epub) {
+        $destfile = $this->_tmpdir . $filename . '.epub';
+        $livre = new Livrable_Tei2epub($doc); 
+        $livre->epub($destfile);
+        _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
+        insert_files_for_item($item, 'Filesystem', $destfile);
+        unlink($destfile); // delete tmp epub file
+      }
+      
 
       // transform to html one file
       $destfile = $this->_tmpdir . $filename . '.html';
@@ -272,36 +301,55 @@ DROP TABLE IF EXISTS `{$this->_table}`
       unlink($destfile); // delete tmp file
       
 
-      // generate the pages and load them in the table
-      $destdir = $this->_tmpdir . $filename . '/';
-      if (!file_exists($destdir)) mkdir($destdir);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2site.xsl');
-      $this->_trans->importStyleSheet($this->_xsl);
-      $this->_trans->setParameter(null, "destdir", $destdir);
-      $this->_trans->setParameter(null, "root", "article"); // html fragment
-      $this->_trans->setParameter(null, "base", "?section="); // links, as an uri parameter
-      $this->_trans->setParameter(null, "_html", ""); // links, no extension
-      $this->_trans->transformToXML($doc);
-      $db = $this->_db;
-      $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
-      foreach(scandir($destdir) as $f) {
-        if ($f[0] == '.') continue;
-        $section = pathinfo($f, PATHINFO_FILENAME);
-        $html = file_get_contents($destdir.$f);
+      if ($type == SELF::LETTER_NAME) {
+        $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2html.xsl');
+        $this->_trans->importStyleSheet($this->_xsl);
+        $this->_trans->setParameter(null, "root", "article"); // html fragment
+        // TODO links ?
+        $html = $this->_trans->transformToXML($doc);
+        $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
         $db->insert(
           self::TABLE, 
           array(
             "item" => $item->id,
             "file" => $file->id,
             "filename" => $filename,
-            "section" => $section,
+            "type" => $type,
+            "section" => 'index',
             "html" => $html,
           )
         );
-        // unlink($destdir.$f); // delete file now
       }
-      // rmdir($destdir);
-      
+      else { // generic 
+        $destdir = $this->_tmpdir . $filename . '/';
+        if (!file_exists($destdir)) mkdir($destdir);
+        $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2site.xsl');
+        $this->_trans->importStyleSheet($this->_xsl);
+        $this->_trans->setParameter(null, "destdir", $destdir);
+        $this->_trans->setParameter(null, "root", "article"); // html fragment
+        $this->_trans->setParameter(null, "base", "?section="); // links, as an uri parameter
+        $this->_trans->setParameter(null, "_html", ""); // links, no extension
+        $this->_trans->transformToXML($doc);
+        $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
+        foreach(scandir($destdir) as $f) {
+          if ($f[0] == '.') continue;
+          $section = pathinfo($f, PATHINFO_FILENAME);
+          $html = file_get_contents($destdir.$f);
+          $db->insert(
+            self::TABLE, 
+            array(
+              "item" => $item->id,
+              "file" => $file->id,
+              "filename" => $filename,
+              "type" => $type,
+              "section" => $section,
+              "html" => $html,
+            )
+          );
+          unlink($destdir.$f); // delete file now
+        }
+        rmdir($destdir);
+      }
       
       return;
     }
@@ -367,6 +415,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     echo '<label for="bookmeka_tmpdir">'.__('Temp directory')."</label>\n";
     echo get_view()->formText('bookmeka_tmpdir', get_option('bookmeka_tmpdir'));
     echo "</div>\n";
+    /*
     echo '<div class="field">'."\n";
     echo '<p class="explanation">'.__(
       'For short items like letters or articles (not books), change default policy of multi-pages.'
@@ -374,6 +423,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     echo '<label for="bookmeka_singlepage">'.__('Single page')."</label>\n";
     echo get_view()->formCheckbox('bookmeka_singlepage', true, array('checked'=>(boolean)get_option('bookmeka_singlepage')));
     echo "</div>\n";
+    */
   }
 
   /**
@@ -394,8 +444,9 @@ DROP TABLE IF EXISTS `{$this->_table}`
       delete_option('bookmeka_tmpdir');
     }
     else {
-      set_option('bookmeka_tmpdir', trim($_POST['bookmeka_tmpdir']));
+      set_option('bookmeka_tmpdir', rtrim(trim($_POST['bookmeka_tmpdir']), "/\\").'/');
     }
+    /*
     if (!isset($_POST['bookmeka_singlepage']));
     // empty value, delete prop
     else if (!$_POST['bookmeka_singlepage']) {
@@ -404,6 +455,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     else {
       set_option('bookmeka_singlepage', (boolean)$_POST['bookmeka_singlepage']);
     }
+    */
   }
 
   function hookAdminHead($request)
