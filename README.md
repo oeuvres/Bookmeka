@@ -7,10 +7,11 @@ An Omeka plugin for books (odt, tei, epub)
 
 interface: Admin / Settings / Security / Disable File Upload Validation
 file: application/config/config.ini uncomment upload.maxFileSize = "10M"
+(php.ini)
 
-## Configuration params (TODO)
+## Configuration params
 
- * tmp dir where to write producted files
+ * tmp dir where to write produced files
  * 
 
 ## Roadmap
@@ -32,7 +33,7 @@ file: application/config/config.ini uncomment upload.maxFileSize = "10M"
    - support for images from odt files
    - support for images from zipped tei
    - batch regeneration
-   - plugin options (ex: export formats) 
+   - plugin options for export formats
    - mechanism to extend TEI suppport
    - CsvImport of tei, odt, epub 
    - default search engine
