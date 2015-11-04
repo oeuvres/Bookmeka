@@ -143,12 +143,11 @@ DROP TABLE IF EXISTS `{$this->_table}`
     $this->_xsl = new DOMDocument();
   }
   public function fileDisplay($file, $options=array(), $wrapperAttributes = array()) {
-    // _log('fileDisplay');
-    // echo( '<pre>'.json_encode($file, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE).'</pre>');
     $url = file_display_url($file, $format='original');
-    $extension = $file->getExtension();
-    if ($file->mime_type == self::MIME_TEI) $extension = "tei";
-    echo ' <a class="bookmeka-file " target="_new" href="'.$url.'" title="'.$file->original_filename.'">'.$file->getExtension().'</a> ';
+    $label = $file->getExtension();
+    if ($file->mime_type == self::MIME_TEI) $label = "tei";
+    if ($file->mime_type == self::MIME_IRAMUTEQ) $label = "iramuteq";
+    echo ' <a class="bookmeka-file " target="_new" href="'.$url.'" title="'.$file->original_filename.'">'.$label.'</a> ';
   }
   
   /**
@@ -235,29 +234,6 @@ DROP TABLE IF EXISTS `{$this->_table}`
       $doc->formatOutput = true; // allow correct indentation
 
       
-      // load metadata
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2dc.xsl');
-      $this->_trans->importStyleSheet($this->_xsl);
-      $dc=$this->_trans->transformToDoc($doc);
-      // loop on properties and record theme for afterSaveItem
-      foreach ($dc->documentElement->childNodes as $el) {
-        $html = $el->ownerDocument->saveXML($el);
-        $html = trim(preg_replace('@^<[^>]+>(.*)</[^>]+>$@s', "$1", trim($html)));
-        // bug, text node
-        if (!$el->localName) {
-          _log('Bookmeka, item #'.$item->id.' '.$file->original_filename. ' <???> '.$html, Zend_Log::INFO);
-          continue;
-        }
-        // get Element id
-        $element = $item->getElement(self::DC, ucfirst($el->localName));
-        // unknown property for Omeka, be nice, log it (which level ? DEBUG ?)
-        if (!$element) {
-          _log('Bookmeka, item #'.$item->id.' '.$file->original_filename.' '.$el->tagName.' '.$html, Zend_Log::INFO);
-          continue;
-        }
-        if (!isset($this->_metas[$element['id']])) $this->_metas[$element['id']] = array();
-        $this->_metas[$element['id']][] = $html;
-      }
       
       // epub
       $epub = true;
@@ -271,20 +247,10 @@ DROP TABLE IF EXISTS `{$this->_table}`
         unlink($destfile); // delete tmp epub file
       }
       
-
-      // transform to html one file
-      $destfile = $this->_tmpdir . $filename . '.html';
-      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2html.xsl');
-      $this->_trans->importStyleSheet($this->_xsl);
-      $this->_trans->transformToUri($doc, $destfile);
-      insert_files_for_item($item, 'Filesystem', $destfile);
-      unlink($destfile); // delete tmp html file
-
       // markdown
       $destfile = $this->_tmpdir . $filename . '.md';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2txt.xsl');
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2md.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->transformToUri($doc, $destfile);
       insert_files_for_item($item, 'Filesystem', $destfile);
@@ -293,7 +259,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       // iramuteq
       $destfile = $this->_tmpdir . $filename . '.txt';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2txt.xsl');
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2iramuteq.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->setParameter(null, 'mode', 'iramuteq');
       $this->_trans->transformToUri($doc, $destfile);
@@ -301,11 +267,47 @@ DROP TABLE IF EXISTS `{$this->_table}`
       unlink($destfile); // delete tmp file
       
 
-      if ($type == SELF::LETTER_NAME) {
-        $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2html.xsl');
-        $this->_trans->importStyleSheet($this->_xsl);
+      // transformations with the bookmeka pilot
+      $this->_xsl->load(dirname(__FILE__).'/bookmeka.xsl');
+      $this->_trans->importStyleSheet($this->_xsl);
+      
+      // load Dublin Core metadata
+      $this->_trans->setParameter(null, "mode", "dc");
+      $this->_trans->setParameter(null, "dc-value", "html");
+      $dc=$this->_trans->transformToDoc($doc);
+      // loop on properties and record theme for afterSaveItem
+      foreach ($dc->documentElement->childNodes as $el) {
+        $html = $el->ownerDocument->saveXML($el);
+        $html = trim(preg_replace('@^<[^>]+>(.*)</[^>]+>$@s', "$1", trim($html))); // innerHTML
+        // bug, text node
+        if (!$el->localName) {
+          _log('Bookmeka, item #'.$item->id.' '.$file->original_filename. ' <???> '.$html, Zend_Log::INFO);
+          continue;
+        }
+        // get Element id
+        $element = $item->getElement(self::DC, ucfirst($el->localName));
+        // unknown property for Omeka, be nice, log it (which level ? DEBUG ?)
+        if (!$element) {
+          _log('Bookmeka, item #'.$item->id.' '.$file->original_filename.' '.$el->tagName.' '.$html, Zend_Log::INFO);
+          continue;
+        }
+        // first time encounter property, open an array in the recorder
+        if (!isset($this->_metas[$element['id']])) $this->_metas[$element['id']] = array();
+        // add html
+        $this->_metas[$element['id']][] = $html;
+      }
+      
+      // transform to html monopage
+      $this->_trans->setParameter(null, "mode", "html");
+      $destfile = $this->_tmpdir . $filename . '.html';
+      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
+      $this->_trans->transformToUri($doc, $destfile);
+      insert_files_for_item($item, 'Filesystem', $destfile);
+      unlink($destfile); // delete tmp html file
+      // feed database with desired html fragment
+      if ($type == SELF::LETTER_NAME || $type == SELF::ARTICLE_NAME) { // item in one file
+        $this->_trans->setParameter(null, "mode", "html");
         $this->_trans->setParameter(null, "root", "article"); // html fragment
-        // TODO links ?
         $html = $this->_trans->transformToXML($doc);
         $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
         $db->insert(
@@ -320,11 +322,10 @@ DROP TABLE IF EXISTS `{$this->_table}`
           )
         );
       }
-      else { // generic 
+      else { // generic multi-page
+        $this->_trans->setParameter(null, "mode", "site");
         $destdir = $this->_tmpdir . $filename . '/';
         if (!file_exists($destdir)) mkdir($destdir);
-        $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2site.xsl');
-        $this->_trans->importStyleSheet($this->_xsl);
         $this->_trans->setParameter(null, "destdir", $destdir);
         $this->_trans->setParameter(null, "root", "article"); // html fragment
         $this->_trans->setParameter(null, "base", "?section="); // links, as an uri parameter
@@ -460,14 +461,16 @@ DROP TABLE IF EXISTS `{$this->_table}`
 
   function hookAdminHead($request)
   {
-    queue_css_file('omeka');
+    // queue_css_file('bookmeka');
   }
 
   function hookPublicHead($request)
   {
-    queue_css_file('html');
+    // get resources from a submodule
+    queue_css_url(WEB_PLUGIN . '/Bookmeka/libraries/Transtei/tei2html.css');
+    queue_js_url(WEB_PLUGIN . '/Bookmeka/libraries/Transtei/Tree.js');
+    // path in plugin default structure
     queue_css_file('bookmeka');
-    queue_js_file('Tree');
     queue_js_file('bookmeka');
   }
   /**
