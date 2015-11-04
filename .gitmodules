@@ -1,6 +1,3 @@
-[submodule "libraries/Transtei"]
-	path = libraries/Transtei
-	url = ../Transtei
 [submodule "libraries/Livrable"]
 	path = libraries/Livrable
 	url = ../Livrable
