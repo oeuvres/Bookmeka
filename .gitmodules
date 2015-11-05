@@ -4,3 +4,7 @@
 [submodule "libraries/Odette"]
 	path = libraries/Odette
 	url = ../Odette
+[submodule "libraries/Teinte"]
+	path = libraries/Teinte
+	url = ../Teinte
+	branch = gh-pages
