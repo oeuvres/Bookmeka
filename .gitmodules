@@ -4,7 +4,3 @@
 [submodule "libraries/Odette"]
 	path = libraries/Odette
 	url = ../Odette
-[submodule "libraries/Transtei"]
-	path = libraries/Transtei
-	url = ../Transtei
-	branch = gh-pages
