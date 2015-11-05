@@ -5,17 +5,40 @@ An Omeka plugin for books (odt, tei, epub)
 
 ## Install
 
-interface: Admin / Settings / Security / Disable File Upload Validation
-file: application/config/config.ini uncomment upload.maxFileSize = "10M"
+Still for developpers only.
+  $ cd {myOmeka/}plugins/
+  
+  # for git 1.6.5+, option recursive to obtain submodules
+  $ git clone --recursive https://github.com/oeuvres/Bookmeka.git
+  
+  # for git < 1.6.5 (not yet tested)
+  $ git clone https://github.com/oeuvres/Bookmeka.git
+  $ cd Bookmeka
+  $ git submodule update --init --recursive
+
+ * http://{mydomain.net/myOmeka/}admin/: Settings / Security / Disable File Upload Validation
+ * file:///{myOmeka/}application/config/config.ini uncomment upload.maxFileSize = "10M"
 (php.ini)
 
-## Configuration params
 
- * tmp dir where to write produced files
- * 
 
 ## Roadmap
 
+ - TODO (in order of priority)
+   - CsvImport of tei or odt (epub) 
+   - batch regeneration (ex: after reinstall)
+   - collect Consortium CAHIER needs and requests
+   - id policy and url routes
+   - better graphic integration with Omeka themes
+   - validation report and online help for metas
+   - support for images from odt files
+   - support for images from zipped tei
+   - plugin options for export formats
+   - default search engine
+   - integration of omeka items (images) in TEI
+  - MAYDO
+   - epub ingestion
+   - advanced search engine with lemmas
  - DONE
    - tei > Dublin Core insertion
    - odt > tei
@@ -24,20 +47,5 @@ file: application/config/config.ini uncomment upload.maxFileSize = "10M"
    - tei > iramuteq
    - tei > toc and html fragments
    - public display
- - TODO
-   - collect Consortium CAHIER needs and requests
-   - id policy and url routes
-   - better graphic integration with Omeka themes
-   - omeka item images in TEI
-   - validation report and online help for metas
-   - support for images from odt files
-   - support for images from zipped tei
-   - batch regeneration
-   - plugin options for export formats
-   - mechanism to extend TEI suppport
-   - CsvImport of tei, odt, epub 
-   - default search engine
-  - MAYDO
-   - epub ingestion
-   - advanced search engine with lemmas
+   - mechanism to extend TEI suppport (an XSL Transformation pilot, can override default behaviors)
 
