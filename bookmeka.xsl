@@ -15,11 +15,16 @@ It’s not a good idea to change it.
 
 
 -->
-<xsl:transform version="1.1" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns="http://www.w3.org/1999/xhtml" xmlns:tei="http://www.tei-c.org/ns/1.0" exclude-result-prefixes="tei">
+<xsl:transform version="1.0" 
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform" 
+  xmlns="http://www.w3.org/1999/xhtml" 
+  xmlns:tei="http://www.tei-c.org/ns/1.0" 
+  exclude-result-prefixes="tei"
+>
   <!-- Import of html transformation chain -->
-  <xsl:import href="libraries/Transtei/tei2site.xsl"/>
+  <xsl:import href="libraries/Teinte/tei2site.xsl"/>
   <!-- Import of Dublin Core generator -->
-  <xsl:import href="libraries/Transtei/tei2dc.xsl"/>
+  <xsl:import href="libraries/Teinte/tei2dc.xsl"/>
   <!-- Global constants for known modes  -->
   <xsl:variable name="site">site</xsl:variable>
   <xsl:variable name="dc">dc</xsl:variable>  

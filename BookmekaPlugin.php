@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS `{$this->_table}` (
     );
   }
   /**
+   * Uninstall
    * Suppress all generated html chapters
    */
   function hookUninstall()
@@ -250,7 +251,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       // markdown
       $destfile = $this->_tmpdir . $filename . '.md';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2md.xsl');
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Teinte/tei2md.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->transformToUri($doc, $destfile);
       insert_files_for_item($item, 'Filesystem', $destfile);
@@ -259,7 +260,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       // iramuteq
       $destfile = $this->_tmpdir . $filename . '.txt';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_xsl->load(dirname(__FILE__).'/libraries/Transtei/tei2iramuteq.xsl');
+      $this->_xsl->load(dirname(__FILE__).'/libraries/Teinte/tei2iramuteq.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->setParameter(null, 'mode', 'iramuteq');
       $this->_trans->transformToUri($doc, $destfile);
@@ -356,24 +357,36 @@ DROP TABLE IF EXISTS `{$this->_table}`
     }
   }
   /**
-   * If a file deleted
    * When item is deleted, all files will be deleted
-   * 
+   * If one file is deleted, do nothing, user may want to keep only 
+   * some formats (for example, no public XML/TEI)
    */
   public function hookBeforeDeleteFile($args) {
     
     
   }
   /**
+   * Nothing to do for now
    */
   public function hookBeforeSaveItem($args)
   {
     // $item = $args['record'];
   }
   /**
-   * After save
+   * After save item
+   * The hooks on files have generate different datas concerning the item.
+   * 
+   * — $this->_files2delete
+   * Add an XML/TEI file will replace the one with the same name, and all the old generated files.
+   * Detach old files has to be done at the end of the transaction process.
+   * The array $this->_files2delete has been recorded by file hooks.
+   * It’s now time to do the work.
    *
-   * Seems the best place to deal with old posted metadatas, and new from file 
+   * — $this->_metas
+   * Add an XML/TEI file should also replace the metadatas from the previous file.
+   * Because user may want to add metas from the Omeka form, XML/TEI
+   * affect only the Dublin Core fields with a value.
+   *
    */
   function hookAfterSaveItem($args)
   {
@@ -395,26 +408,50 @@ DROP TABLE IF EXISTS `{$this->_table}`
       }
     }
     $this->_metas = array();
+    // delete here
     foreach ($this->_files2delete as $f) $f->delete();
     $this->_files2delete = array();
   }
   /**
-   * On item deletion (or on TEI file deletion ?), delete the generated HTML subitems
+   * On item deletion delete the generated HTML subitems
    */
   function hookBeforeDeleteItem($args)
   {
     $item = $args['record'];
     $this->_db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
   }
-
+  /**
+   * Configuration form
+   */
   function hookConfigForm()
   {
+    echo "<h3>".__('File formats allowed for download')."</h3>\n";
+    echo '<p>'.__('Bookmeka can generate multiple export formats for text ingested. It’s easy to delete one or another file for each item. It is also possible to define a global site policy here for exports. Default is all formats checked. Changes of this policy on a living site will only affect new items. Run a batch task will follow this new policy.')."</p>\n";
+    
+    echo '<div class="field">'."\n";
+    echo '<p class="explanation">'.__(
+      'Odt (office format), expose an odt source (only if it has been submitted as source format for XML/TEI)'
+    )."</p>\n";
+    echo '<label for="bookmeka_debug">'.__('Debug')."</label>\n";
+    echo get_view()->formCheckbox('bookmeka_debug', true, array('checked'=>(boolean)get_option('bookmeka_debug')));
+    echo "</div>\n";
+    
+    
+    echo "<h3>".__('Advanced options')."</h3>\n";
     echo '<div class="field">'."\n";
     echo '<p class="explanation">'.__(
       'Give an alternate tmp dir for generated contents.'
     )."</p>\n";
     echo '<label for="bookmeka_tmpdir">'.__('Temp directory')."</label>\n";
     echo get_view()->formText('bookmeka_tmpdir', get_option('bookmeka_tmpdir'));
+    echo "</div>\n";
+    
+    echo '<div class="field">'."\n";
+    echo '<p class="explanation">'.__(
+      'Mode debug, for developpers of an application, will give some useful alert messages.'
+    )."</p>\n";
+    echo '<label for="bookmeka_debug">'.__('Debug')."</label>\n";
+    echo get_view()->formCheckbox('bookmeka_debug', true, array('checked'=>(boolean)get_option('bookmeka_debug')));
     echo "</div>\n";
     /*
     echo '<div class="field">'."\n";
@@ -467,8 +504,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookPublicHead($request)
   {
     // get resources from a submodule
-    queue_css_url(WEB_PLUGIN . '/Bookmeka/libraries/Transtei/tei2html.css');
-    queue_js_url(WEB_PLUGIN . '/Bookmeka/libraries/Transtei/Tree.js');
+    queue_css_url(WEB_PLUGIN . '/Bookmeka/libraries/Teinte/tei2html.css');
+    queue_js_url(WEB_PLUGIN . '/Bookmeka/libraries/Teinte/Tree.js');
     // path in plugin default structure
     queue_css_file('bookmeka');
     queue_js_file('bookmeka');
