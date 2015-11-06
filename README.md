@@ -6,27 +6,30 @@ An Omeka plugin for books (odt, tei, epub)
 ## Install
 
 Still for developpers only.
-  $ cd {myOmeka/}plugins/
+
+Download working sources with submodules in your omeka plugins/ directory.
+```
+$ cd {myOmeka/}plugins/
   
-  # for git 1.6.5+, option recursive to obtain submodules
-  $ git clone --recursive https://github.com/oeuvres/Bookmeka.git
+# for git 1.6.5+, option recursive to obtain submodules
+$ git clone --recursive https://github.com/oeuvres/Bookmeka.git
   
-  # for git < 1.6.5 (not yet tested)
-  $ git clone https://github.com/oeuvres/Bookmeka.git
-  $ cd Bookmeka
-  $ git submodule update --init --recursive
+# for git < 1.6.5 (not yet tested)
+$ git clone https://github.com/oeuvres/Bookmeka.git
+$ cd Bookmeka
+$ git submodule update --init --recursive
+```
 
- * http://{mydomain.net/myOmeka/}admin/: Settings / Security / Disable File Upload Validation
- * file:///{myOmeka/}application/config/config.ini uncomment upload.maxFileSize = "10M"
-(php.ini)
+Other site configuration
 
-
+ * [Obeka admin interface] http://{mydomain.net/myOmeka/}admin/: Settings / Security / Disable File Upload Validation
+ * [Omeka configuration file] file:///{myOmeka/}application/config/config.ini uncomment upload.maxFileSize = "10M"
 
 ## Roadmap
 
  - TODO (in order of priority)
-   - CsvImport of tei or odt (epub) 
-   - batch regeneration (ex: after reinstall)
+   - CsvImport of tei or odt
+   - batch regeneration (ex: to restore all transformations)
    - collect Consortium CAHIER needs and requests
    - id policy and url routes
    - better graphic integration with Omeka themes
