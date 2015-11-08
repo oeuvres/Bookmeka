@@ -13,12 +13,31 @@ $ cd {myOmeka/}plugins/
   
 # for git 1.6.5+, option recursive to obtain submodules
 $ git clone --recursive https://github.com/oeuvres/Bookmeka.git
+# set branch of modules for easier update
+$ git submodule foreach --recursive git checkout master
   
 # for git < 1.6.5 (not yet tested)
 $ git clone https://github.com/oeuvres/Bookmeka.git
 $ cd Bookmeka
 $ git submodule update --init --recursive
 ```
+
+Pull from github
+```sh
+# update Bookmeka root
+$ git pull
+# update submodule
+$ git submodule foreach --recursive git pull
+```
+
+Push to github
+```sh
+# Commit your local changes and push it to remote
+$ git commit
+$ git push
+# Do no modify submodules in Bookmeka context (or be a “git guru” and fill this tuto)
+```
+
 
 Other site configuration
 
