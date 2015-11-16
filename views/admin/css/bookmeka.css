@@ -1,0 +1,4 @@
+fieldset.bookmeka { border: 1px #AAAAAA solid; border-radius: 10px; padding: 1ex; }
+label.bookmeka { display: block; }
+label input[type="checkbox"] { margin-right: 1ex; }
+label.todo { background: #DDDDDD; padding: 0 1ex 2px 1ex; color: #999999; }
