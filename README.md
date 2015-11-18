@@ -49,13 +49,12 @@ Other site configuration
  - TODO (in order of priority)
    - CsvImport of tei or odt
    - batch regeneration (ex: to restore all transformations)
+   - better graphic integration with Omeka themes
    - collect Consortium CAHIER needs and requests
    - id policy and url routes
-   - better graphic integration with Omeka themes
    - validation report and online help for metas
    - support for images from odt files
    - support for images from zipped tei
-   - plugin options for export formats
    - default search engine
    - integration of omeka items (images) in TEI
   - MAYDO
@@ -63,11 +62,11 @@ Other site configuration
    - advanced search engine with lemmas
  - DONE
    - tei > Dublin Core insertion
+   - tei > toc and html fragments
    - odt > tei
    - tei > epub
    - tei > markdown
    - tei > iramuteq
-   - tei > toc and html fragments
    - public display
    - mechanism to extend TEI suppport (an XSL Transformation pilot, can override default behaviors)
-
+   - plugin options for export formats

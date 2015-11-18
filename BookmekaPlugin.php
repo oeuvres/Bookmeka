@@ -466,7 +466,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
   function hookConfig($args)
   {
     $message = array();
-    // test if tmpdir writable
+    // TODO test if tmpdir writable
     if (!isset($_POST['bookmeka_tmpdir']));
     else if (!$_POST['bookmeka_tmpdir']) { // empty value, delete prop
       delete_option('bookmeka_tmpdir');
@@ -505,13 +505,18 @@ DROP TABLE IF EXISTS `{$this->_table}`
        */
       Zend_Registry::get('bootstrap')->getResource('jobs')->sendLongRunning(
         'Bookmeka_CsvJob', 
-        array('csvpath' => $file['tmp_name'], 'csvname' =>  $file['name'])
+        array(
+          'csvpath' => $file['tmp_name'], 
+          'csvname' =>  $file['name'],
+          'collection' => @$_POST['bookmeka_collection'],
+          'itemtype' => isset($_POST['bookmeka_itemtype'])?$_POST['bookmeka_itemtype']:null,
+        )
       );
       $message[] = __("%s, traitement lancé.", $file['name']);
       break; // dont’t forget it or infinite loop)
     }
     $message[] = __("Bookmeka est configuré.");
-    throw new Omeka_Validate_Exception($message);
+    throw new Omeka_Validate_Exception(implode("\n", $message));
   }
 
   function hookAdminHead($request)

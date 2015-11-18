@@ -1,9 +1,8 @@
 <?php
-// hack needed to set 
-/*
 echo __('
 <p>Import par lot, fichier CSV, séparateur de cellule, tabulation (\\t), saut de ligne UNIX (\\n, LF).</p>
 ');
+/*
 echo '
 <table>
   <tr>
@@ -23,12 +22,21 @@ echo '
   </tr>
 </table>
 ';
-echo get_view()->formFile('bookmeka_csv');
-
-// hack to set form/@enctype
-echo '<script type="text/javascript">document.getElementById("bookmeka_csv").form.enctype="multipart/form-data";</script>';
-
 */
+echo get_view()->formFile('bookmeka_csv');
+// hack to set form/@enctype, just after the field 
+echo '<script type="text/javascript">document.getElementById("bookmeka_csv").form.enctype="multipart/form-data";</script>';
+$options = get_db()->getTable('ItemType')->findPairsForSelectForm();
+if (!empty($options)) {
+  $options = array('' => __('Choisir un type d’item')) + $options;
+  echo get_view()->formSelect('bookmeka_itemtype', null, null, $options);
+}
+
+$options = get_db()->getTable('Collection')->findPairsForSelectForm();
+if (!empty($options)) {
+  $options = array('' => __('Choisir une collection')) + $values;
+  echo get_view()->formSelect('bookmeka_collection', null, array('' => __('Choisir une collection')), $options);
+}
 echo "<h3>".__('Formats de fichiers téléchargeables')."</h3>\n";
 echo '<p class="explanation">'.__('
 Bookmeka importe des textes dans plusieurs formats de fichier (office/odt, xml/tei).
