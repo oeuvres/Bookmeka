@@ -25,8 +25,14 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
   const LETTER_DESCRIPTION = "Text item in a correspondance";
   const ARTICLE_NAME = "Article";
   const ARTICLE_DESCRIPTION = "Text item in one page";
-  
   const DC = "Dublin Core";
+  static $extensions = array(
+    "epub"=>true, 
+    "html"=>true, 
+    "md"=>true, 
+    "txt"=>true, 
+    "xml"=>true
+  );
   protected $_tmpdir;
   protected $_hooks = array(
     'admin_head', 
@@ -94,16 +100,17 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
 CREATE TABLE IF NOT EXISTS `{$this->_table}` (
   id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, -- auto id for subitems
   item INT(10) UNSIGNED,  -- omeka id of item
-  file INT(10) UNSIGNED,  -- omeka id of source file in item
-  filename VARCHAR(200),  -- filename of book, should be unique for collection
-  type VARCHAR(200),      -- type of resource
-  section VARCHAR(200),   -- id of section in file
+  filename VARCHAR(200),  -- filename of book, should be unique by unique, to use as route
+  filemtime int(11) DEFAULT 0, -- timestamp, for file record only
+  section VARCHAR(200),   -- @xml-id of section
   html LONGBLOB,          -- html to display for section
   PRIMARY KEY  (id),
   INDEX (item, section),
   INDEX (filename)
-) ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;"
+);"
     );
+    // should be set upper by Omeka schema
+    // ENGINE=INNODB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci
     // default values for options
     if (is_null(get_option('bookmeka_epub'))) set_option('bookmeka_epub', true);
     if (is_null(get_option('bookmeka_html'))) set_option('bookmeka_html', true);
@@ -124,6 +131,9 @@ CREATE TABLE IF NOT EXISTS `{$this->_table}` (
 DROP TABLE IF EXISTS `{$this->_table}`
     ");
   }
+  /**
+   * Fire on each Request
+   */
   function hookInitialize()
   {
     $this->_table = $this->_db->prefix.self::TABLE;
@@ -226,7 +236,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
       $odt=new Odette_Odt2tei($file->getPath());
       if (file_exists($destfile)) unlink($destfile); // if tmp file incorrectly deleted before, retry now
       $odt->save($destfile, "tei");
-      insert_files_for_item($item, 'Filesystem', $destfile); // the xml file will recall this hook
+      $torelease = insert_files_for_item($item, 'Filesystem', $destfile); // the xml file will recall this hook
+      release_object($torelease);
       unlink($destfile); // delete tmp xml file after ingestion
       // do not keep the source odt file
       $this->_files2delete[] = $file;
@@ -237,23 +248,34 @@ DROP TABLE IF EXISTS `{$this->_table}`
     if ( ($file->mime_type && !isset($this->_mimetei[$file->mime_type])) && 'xml' != $extension) return;
     $magic = file_get_contents($file->getPath(), false, null, -1, 4096);
     if (strpos($magic, '<TEI')===false) return; // not tei, nothing todo here
+    
     // seems an xml/tei file, let’s work 
-
     $file->mime_type = self::MIME_TEI;
     // loop on the files of item and delete the ones we will generate here
-    $exts = array("epub"=>true, "html"=>true, "md"=>true, "txt"=>true, "xml"=>true);
     foreach($item->Files as $key=>$loopfile) {
       $pathinfo = pathinfo($loopfile->original_filename);
       // if($pathinfo['filename'] != $filename) continue; // only one file by extension
-      if(!isset($exts[$pathinfo['extension']])) continue;
-      // do not delete here, delete after save
+      if(!isset(self::$extensions[$pathinfo['extension']])) continue;
       $this->_files2delete[] = $loopfile;
+      // $loopfile->delete(); // DO NOT delete here, or you will have an ERROR impossible to understand from Omeka
     }
       
-    // delete everything in base about this TEI file
+    // delete html fragments about this TEI file
     _log('Bookmeka, item #'.$item->id.' '.$filename.' store in base', Zend_Log::INFO);
     $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
-    // can’t store TEI xml in base without changing the my.ini : wait_timeout, max_allowed_packet  
+    // keep some infos about TEI file
+    $db->insert(
+      self::TABLE, 
+      array(
+        "item" => $item->id,
+        "filename" => $filename,
+        "section" => $filename.'.xml',
+        "filemtime" => filemtime($file->getPath()),
+        // can’t store TEI xml in base without changing the my.ini : wait_timeout, max_allowed_packet  
+      )
+    );
+    
+    
     // do not keep TEI file for item if not desired from conf
     if (!get_option('bookmeka_tei')) $this->_files2delete[] = $file;
       
@@ -263,17 +285,6 @@ DROP TABLE IF EXISTS `{$this->_table}`
     $doc->preserveWhiteSpace = false;
     $doc->formatOutput = true; // allow correct indentation
 
-    // epub
-    $epub = get_option('bookmeka_epub');
-    if ($type == self::LETTER_NAME) $epub = false; // no epub for letters
-    if ($epub) {
-      $destfile = $this->_tmpdir . $filename . '.epub';
-      $livre = new Livrable_Tei2epub($doc, '_log');
-      $livre->epub($destfile);
-      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      insert_files_for_item($item, 'Filesystem', $destfile);
-      unlink($destfile); // delete tmp epub file
-    }
 
     // transformations with the bookmeka pilot
     $this->_xsl->load(dirname(__FILE__).'/bookmeka.xsl');
@@ -283,7 +294,12 @@ DROP TABLE IF EXISTS `{$this->_table}`
     $this->_trans->setParameter(null, "mode", "dc");
     $this->_trans->setParameter(null, "dc-value", "html");
     $dc=$this->_trans->transformToDoc($doc);
+    
+    
+
+    
     // loop on properties and record theme for afterSaveItem
+    $this->_metas = array();
     foreach ($dc->documentElement->childNodes as $el) {
       $html = $el->ownerDocument->saveXML($el);
       $html = trim(preg_replace('@^<[^>]+>(.*)</[^>]+>$@s', "$1", trim($html))); // innerHTML
@@ -299,19 +315,49 @@ DROP TABLE IF EXISTS `{$this->_table}`
         _log('Bookmeka, item #'.$item->id.' '.$file->original_filename.' '.$el->tagName.' '.$html, Zend_Log::INFO);
         continue;
       }
-      // first time encounter property, open an array in the recorder
-      if (!isset($this->_metas[$element['id']])) $this->_metas[$element['id']] = array();
-      // add html
+      // first time encounter property, delete for item, open an array in the recorder
+      if (!isset($this->_metas[$element['id']])) {
+        $this->_metas[$element['id']] = array();
+        $item->deleteElementTextsByElementId(array($element['id']));
+        if (isset($_POST['Elements']) && isset($_POST['Elements'][$element['id']])) unset($_POST['Elements'][$element['id']]);
+      }
+      // add html content for property
       $this->_metas[$element['id']][] = $html;
+      $prop = new ElementText;
+      $prop->record_id = $item->id;
+      $prop->record_type = 'Item';
+      $prop->element_id = $element->id;
+      $prop->text = $html;
+      $prop->html = true;
+      $prop->save();
     }
+    // _log("POST=".json_encode($_POST, JSON_FORCE_OBJECT|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
+
+    
+    // epub
+    $epub = get_option('bookmeka_epub');
+    if ($type == self::LETTER_NAME) $epub = false; // no epub for letters
+    if ($epub) {
+      $destfile = $this->_tmpdir . $filename . '.epub';
+      $livre = new Livrable_Tei2epub($doc, '_log');
+      $livre->epub($destfile);
+      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
+      $torelease = insert_files_for_item($item, 'Filesystem', $destfile);
+      release_object($torelease);
+      unlink($destfile); // delete tmp epub file
+    }
+
     
     // transform to html monopage
     if (get_option('bookmeka_html')) {
       $this->_trans->setParameter(null, "mode", "html");
+      $this->_trans->setParameter(null, "root", "html");
+      $this->_trans->setParameter(null, "teiheader", true());
       $destfile = $this->_tmpdir . $filename . '.html';
       _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
       $this->_trans->transformToUri($doc, $destfile);
-      insert_files_for_item($item, 'Filesystem', $destfile);
+      $torelease = insert_files_for_item($item, 'Filesystem', $destfile);
+      release_object($torelease);
       unlink($destfile); // delete tmp html file
     }
     
@@ -320,14 +366,13 @@ DROP TABLE IF EXISTS `{$this->_table}`
     else if ($type == SELF::LETTER_NAME || $type == SELF::ARTICLE_NAME) { // item in one file
       $this->_trans->setParameter(null, "mode", "html");
       $this->_trans->setParameter(null, "root", "article"); // html fragment
+      $this->_trans->setParameter(null, "teiheader", null);
       $html = $this->_trans->transformToXML($doc);
       $db->insert(
         self::TABLE, 
         array(
           "item" => $item->id,
-          "file" => $file->id,
           "filename" => $filename,
-          "type" => $type,
           "section" => 'index',
           "html" => $html,
         )
@@ -351,9 +396,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
           self::TABLE, 
           array(
             "item" => $item->id,
-            "file" => $file->id,
             "filename" => $filename,
-            "type" => $type,
             "section" => $section,
             "html" => $html,
           )
@@ -370,7 +413,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
       $this->_xsl->load(dirname(__FILE__).'/libraries/Teinte/tei2md.xsl');
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->transformToUri($doc, $destfile);
-      insert_files_for_item($item, 'Filesystem', $destfile);
+      $torelease = insert_files_for_item($item, 'Filesystem', $destfile);
+      release_object($torelease);
       unlink($destfile); // delete tmp file
     }
 
@@ -382,7 +426,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
       $this->_trans->importStyleSheet($this->_xsl);
       $this->_trans->setParameter(null, 'mode', 'iramuteq');
       $this->_trans->transformToUri($doc, $destfile);
-      insert_files_for_item( $item, 'Filesystem', $destfile);
+      $torelease = insert_files_for_item( $item, 'Filesystem', $destfile);
+      release_object($torelease);
       unlink($destfile); // delete tmp file
     }
 
@@ -396,28 +441,25 @@ DROP TABLE IF EXISTS `{$this->_table}`
     
     
   }
+
+  
   /**
    * Nothing to do for now
    */
   public function hookBeforeSaveItem($args)
   {
-    // $item = $args['record'];
   }
   /**
    * After save item
-   * The hooks on files have generate different datas concerning the item.
-   * 
-   * — $this->_files2delete
-   * Add an xml/tei file will replace the one with the same name, and all the old generated files.
-   * Detach old files has to be done at the end of the transaction process.
-   * The array $this->_files2delete has been recorded by file hooks.
-   * It’s now time to do the work.
    *
-   * — $this->_metas
-   * Add an xml/tei file should also replace the metadatas from the previous file.
-   * Because user may want to add metas from the Omeka form, xml/tei
-   * affect only the Dublin Core fields with a value.
+   * A TEI file should replace the previous, for metadatas and generated formats.
    *
+   * — When one item is submitted as a form (not group import like csv)
+   * content of the form (metadata) will be appended to the metadata generated from TEI.
+   * The TEI hook has stored the extracted metadata in $this->_metas
+
+   * — Here seems the only place to delete the files to replace
+   * stored by the TEI hook in $this->_files2delete
    */
   function hookAfterSaveItem($args)
   {
@@ -484,7 +526,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     // will only fire after the javascript hack in config form to set form/@enctype="multipart/form-data"
     while (!empty($_FILES)) {
       // for debug, to see syntax error on the screen
-      include(dirname(__FILE__).'/models/Bookmeka/CsvJob.php');
+      // include(dirname(__FILE__).'/models/Bookmeka/CsvJob.php');
       if (!isset($_FILES['bookmeka_csv'])) {
         $message[] = __('Problème dans le formulaire, il manque le champ bookmeka_csv.');
         break;
@@ -494,20 +536,15 @@ DROP TABLE IF EXISTS `{$this->_table}`
         $message[] = __('Erreur de téléchargement du fichier CSV.');
         break;
       }
-      /*
-        (
-            [name] => oeuvres.csv
-            [type] => application/vnd.ms-excel
-            [tmp_name] => C:\wamp\tmp\php670E.tmp
-            [error] => 0
-            [size] => 114
-        )
-       */
+      $csvpath = $file['tmp_name'];
+      $csvname = $file['name'];
+      // needed to avoid a bug D:\www\omeka\application\libraries\Omeka\File\MimeType\Detect\Strategy\Browser.php on line 23
+      unset($_FILES['bookmeka_csv']);
       Zend_Registry::get('bootstrap')->getResource('jobs')->sendLongRunning(
         'Bookmeka_CsvJob', 
         array(
-          'csvpath' => $file['tmp_name'], 
-          'csvname' =>  $file['name'],
+          'csvpath' => $csvpath, 
+          'csvname' =>  $csvname,
           'collection' => @$_POST['bookmeka_collection'],
           'itemtype' => isset($_POST['bookmeka_itemtype'])?$_POST['bookmeka_itemtype']:null,
         )
@@ -556,6 +593,6 @@ DROP TABLE IF EXISTS `{$this->_table}`
    * For specific theme, deliver Bookmeka object
    */
   static function toc($args) {
-    // echo '<pre>'.json_encode($args, JSON_FORCE_OBJECT|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE).'</pre>';
+    // echo json_encode($args, JSON_FORCE_OBJECT|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE);
   }
 }
