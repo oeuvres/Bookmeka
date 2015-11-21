@@ -41,22 +41,21 @@ $ git push
 
 Other site configuration
 
- * [Obeka admin interface] http://{mydomain.net/myOmeka/}admin/: Settings / Security / Disable File Upload Validation
+ * [Omeka admin interface] http://{mydomain.net/myOmeka/}admin/: Settings / Security / Disable File Upload Validation
  * [Omeka configuration file] file:///{myOmeka/}application/config/config.ini uncomment upload.maxFileSize = "10M"
 
 ## Roadmap
 
  - TODO (in order of priority)
-   - CsvImport of tei or odt
-   - batch regeneration (ex: to restore all transformations)
+   - default search engine
+   - id policy and url routes
    - better graphic integration with Omeka themes
    - collect Consortium CAHIER needs and requests
-   - id policy and url routes
    - validation report and online help for metas
    - support for images from odt files
    - support for images from zipped tei
-   - default search engine
    - integration of omeka items (images) in TEI
+   - batch regeneration (ex: to restore all transformations)
   - MAYDO
    - epub ingestion
    - advanced search engine with lemmas
@@ -70,3 +69,5 @@ Other site configuration
    - public display
    - mechanism to extend TEI suppport (an XSL Transformation pilot, can override default behaviors)
    - plugin options for export formats
+   - CsvImport of tei or odt
+
