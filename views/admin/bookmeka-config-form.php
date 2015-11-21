@@ -1,6 +1,6 @@
 <?php
 echo __('
-<p>Import par lot, fichier CSV, séparateur de cellule, tabulation (\\t), saut de ligne UNIX (\\n, LF).</p>
+<p>Import par lot, fichier CSV, pour l’instant, un descripteur par ligne (fichier ou http).</p>
 ');
 /*
 echo '
@@ -34,7 +34,7 @@ if (!empty($options)) {
 
 $options = get_db()->getTable('Collection')->findPairsForSelectForm();
 if (!empty($options)) {
-  $options = array('' => __('Choisir une collection')) + $values;
+  $options = array('' => __('Choisir une collection')) + $options;
   echo get_view()->formSelect('bookmeka_collection', null, array('' => __('Choisir une collection')), $options);
 }
 echo "<h3>".__('Formats de fichiers téléchargeables')."</h3>\n";
@@ -47,8 +47,6 @@ Par défaut, tous les formats générés sont visibles du public
 comme des fichiers attachés à un item Omeka.
 Décocher un format le rend invisible du public pour tous les nouveaux items créés.
 Pour que les anciens items suivent une modification de la politique, il faut regénérer tous les formats d’export (cf. ci-dessus).
-Si le pivot xml/tei n’a pas été conservé, il n’est pas possible de regénérer les formats d’export à partir de cette 
-interface, il faut réimporter les fichiers sources.
 ')."</p>\n";
 
 echo '<fieldset class="bookmeka">'."\n";

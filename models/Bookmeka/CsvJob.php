@@ -100,13 +100,6 @@ class Bookmeka_CsvJob extends Omeka_Job_AbstractJob
         release_object($item);
         continue;
       }
-      catch (Exception $e) {
-        $msg = "Problem ? '".$row[0]."': ".$e->getMessage();
-        $this->_log($msg, Zend_Log::ERR);
-        $item->delete();
-        release_object($item);
-        continue;
-      }
       release_object($file);
       release_object($item);
     }

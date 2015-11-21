@@ -1,4 +1,4 @@
- <?php
+<?php
 
 /**
  * Bookmeka plugin, display full texte books in Omeka (odt > tei > html > epub)
@@ -80,7 +80,7 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
       return;
     }
     // Insert different types of Items (to adjust output)
-    if(!get_record('ItemType', self::LETTER_NAME)){
+    if(!get_record('ItemType', array('name'=>self::LETTER_NAME))){
       insert_item_type(
         array(
           'name'=> self::LETTER_NAME,
@@ -88,7 +88,7 @@ class BookmekaPlugin extends Omeka_Plugin_AbstractPlugin {
         )
       );
     }
-    if(!get_record('ItemType', self::ARTICLE_NAME)){
+    if(!get_record('ItemType', array('name'=>self::ARTICLE_NAME))){
       insert_item_type(
         array(
           'name'=> self::ARTICLE_NAME,
@@ -261,7 +261,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     }
       
     // delete html fragments about this TEI file
-    _log('Bookmeka, item #'.$item->id.' '.$filename.' store in base', Zend_Log::INFO);
+    _log('Bookmeka, item #'.$item->id.' '.$filename.' extract metadatas', Zend_Log::INFO);
     $db->query("DELETE FROM {$this->_table} WHERE item = {$item->id}");
     // keep some infos about TEI file
     $db->insert(
@@ -294,10 +294,6 @@ DROP TABLE IF EXISTS `{$this->_table}`
     $this->_trans->setParameter(null, "mode", "dc");
     $this->_trans->setParameter(null, "dc-value", "html");
     $dc=$this->_trans->transformToDoc($doc);
-    
-    
-
-    
     // loop on properties and record theme for afterSaveItem
     $this->_metas = array();
     foreach ($dc->documentElement->childNodes as $el) {
@@ -331,9 +327,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       $prop->html = true;
       $prop->save();
     }
-    // _log("POST=".json_encode($_POST, JSON_FORCE_OBJECT|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE));
 
-    
     // epub
     $epub = get_option('bookmeka_epub');
     if ($type == self::LETTER_NAME) $epub = false; // no epub for letters
@@ -347,23 +341,10 @@ DROP TABLE IF EXISTS `{$this->_table}`
       unlink($destfile); // delete tmp epub file
     }
 
-    
-    // transform to html monopage
-    if (get_option('bookmeka_html')) {
-      $this->_trans->setParameter(null, "mode", "html");
-      $this->_trans->setParameter(null, "root", "html");
-      $this->_trans->setParameter(null, "teiheader", true());
-      $destfile = $this->_tmpdir . $filename . '.html';
-      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
-      $this->_trans->transformToUri($doc, $destfile);
-      $torelease = insert_files_for_item($item, 'Filesystem', $destfile);
-      release_object($torelease);
-      unlink($destfile); // delete tmp html file
-    }
-    
     // feed database with desired html fragments
     if (!get_option('bookmeka_site'));
-    else if ($type == SELF::LETTER_NAME || $type == SELF::ARTICLE_NAME) { // item in one file
+    else if ($type == self::LETTER_NAME || $type == self::ARTICLE_NAME) { // item in one file
+      _log('Bookmeka, item #'.$item->id.' '.$filename.' '.$type.' site monopage', Zend_Log::INFO);
       $this->_trans->setParameter(null, "mode", "html");
       $this->_trans->setParameter(null, "root", "article"); // html fragment
       $this->_trans->setParameter(null, "teiheader", null);
@@ -379,6 +360,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       );
     }
     else { // generic multi-page
+      _log('Bookmeka, item #'.$item->id.' '.$filename.' '.$type.' site', Zend_Log::INFO);
       $this->_trans->setParameter(null, "mode", "site");
       $destdir = $this->_tmpdir . $filename . '/';
       if (!file_exists($destdir)) mkdir($destdir);
@@ -405,6 +387,20 @@ DROP TABLE IF EXISTS `{$this->_table}`
       }
       rmdir($destdir);
     }
+    
+    // transform to html monopage
+    if (get_option('bookmeka_html')) {
+      $this->_trans->setParameter(null, "mode", "html");
+      $this->_trans->setParameter(null, "root", "html");
+      $this->_trans->setParameter(null, "teiheader", "do");
+      $destfile = $this->_tmpdir . $filename . '.html';
+      _log('Bookmeka, item #'.$item->id.' '.$file->getPath().' > '.$destfile, Zend_Log::INFO);
+      $this->_trans->transformToUri($doc, $destfile);
+      $torelease = insert_files_for_item($item, 'Filesystem', $destfile);
+      release_object($torelease);
+      unlink($destfile); // delete tmp html file
+    }
+
       
     // markdown
     if (get_option('bookmeka_md')) {
@@ -526,7 +522,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
     // will only fire after the javascript hack in config form to set form/@enctype="multipart/form-data"
     while (!empty($_FILES)) {
       // for debug, to see syntax error on the screen
-      // include(dirname(__FILE__).'/models/Bookmeka/CsvJob.php');
+      include(dirname(__FILE__).'/models/Bookmeka/CsvJob.php');
       if (!isset($_FILES['bookmeka_csv'])) {
         $message[] = __('Problème dans le formulaire, il manque le champ bookmeka_csv.');
         break;
@@ -538,17 +534,23 @@ DROP TABLE IF EXISTS `{$this->_table}`
       }
       $csvpath = $file['tmp_name'];
       $csvname = $file['name'];
-      // needed to avoid a bug D:\www\omeka\application\libraries\Omeka\File\MimeType\Detect\Strategy\Browser.php on line 23
+      // needed to avoid a bug from D:\www\omeka\application\libraries\Omeka\File\MimeType\Detect\Strategy\Browser.php on line 23
       unset($_FILES['bookmeka_csv']);
-      Zend_Registry::get('bootstrap')->getResource('jobs')->sendLongRunning(
-        'Bookmeka_CsvJob', 
-        array(
-          'csvpath' => $csvpath, 
-          'csvname' =>  $csvname,
-          'collection' => @$_POST['bookmeka_collection'],
-          'itemtype' => isset($_POST['bookmeka_itemtype'])?$_POST['bookmeka_itemtype']:null,
-        )
-      );
+      _log("sendLongRunning Bookmeka_CsvJob");
+      try {
+        Zend_Registry::get('bootstrap')->getResource('jobs')->sendLongRunning(
+          'Bookmeka_CsvJob', 
+          array(
+            'csvpath' => $csvpath, 
+            'csvname' =>  $csvname,
+            'collection' => @$_POST['bookmeka_collection'],
+            'itemtype' => isset($_POST['bookmeka_itemtype'])?$_POST['bookmeka_itemtype']:null,
+          )
+        );
+      } catch (Exception $e) {
+        _log("sendLongRunning Bookmeka_CsvJob ".$e);
+        throw $e;
+      }
       $message[] = __("%s, traitement lancé.", $file['name']);
       break; // dont’t forget it or infinite loop)
     }
