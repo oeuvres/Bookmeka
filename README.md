@@ -46,7 +46,7 @@ Other site configuration
 
 ## Roadmap
 
- - TODO (in order of priority)
+- TODO (in order of priority)
    - default search engine
    - id policy and url routes
    - better graphic integration with Omeka themes
@@ -56,10 +56,10 @@ Other site configuration
    - support for images from zipped tei
    - integration of omeka items (images) in TEI
    - batch regeneration (ex: to restore all transformations)
-  - MAYDO
+- MAYDO
    - epub ingestion
    - advanced search engine with lemmas
- - DONE
+- DONE
    - tei > Dublin Core insertion
    - tei > toc and html fragments
    - odt > tei
