@@ -38,8 +38,8 @@ class Bookmeka_CsvJob extends Omeka_Job_AbstractJob
     _log("Bookmeka CsvJob import ".$this->_csvname.' ('.$this->_itemtype.' '.$this->_csvpath.')');
     $db = $this->_db;
     $handle = fopen($this->_csvpath, 'r');
-    // first line should be column names, do something ?
-    $row = fgetcsv($handle, 0, $this->_colsep);
+    // first line, column names ?
+    // $row = fgetcsv($handle, 0, $this->_colsep);
     $l = 0;
     $metadata = array();
     if ($this->_itemtype) $metadata['item_type_id'] = $this->_itemtype;

@@ -521,13 +521,16 @@ DROP TABLE IF EXISTS `{$this->_table}`
 
     // will only fire after the javascript hack in config form to set form/@enctype="multipart/form-data"
     while (!empty($_FILES)) {
-      // for debug, to see syntax error on the screen
-      include(dirname(__FILE__).'/models/Bookmeka/CsvJob.php');
+
       if (!isset($_FILES['bookmeka_csv'])) {
         $message[] = __('Problème dans le formulaire, il manque le champ bookmeka_csv.');
         break;
       }
       $file = $_FILES['bookmeka_csv'];
+      // no file uploaded, go next
+      if (@$_FILES['bookmeka_csv']['error'] == UPLOAD_ERR_NO_FILE) break;
+      // for debug, to see syntax error on the screen
+
       if ($file['error']) {
         $message[] = __('Erreur de téléchargement du fichier CSV.');
         break;
