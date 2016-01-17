@@ -35,7 +35,7 @@ class Bookmeka_CsvJob extends Omeka_Job_AbstractJob
    */
   public function perform()
   {
-    _log("Bookmeka import ".$this->_csvname.' ('.$this->_itemtype.' '.$this->_csvpath.')');
+    _log("Bookmeka CsvJob import ".$this->_csvname.' ('.$this->_itemtype.' '.$this->_csvpath.')');
     $db = $this->_db;
     $handle = fopen($this->_csvpath, 'r');
     // first line should be column names, do something ?
@@ -64,6 +64,7 @@ class Bookmeka_CsvJob extends Omeka_Job_AbstractJob
       // update item
       // TODO compare date if possible for update
       if (isset($fetch['item'])) {
+        _log('Bookmeka_CsvJob, update #'.$fetch['item'].': '.$row[0]);
         $item = get_record_by_id('Item', $fetch['item']);
         update_item($item, $metadata);
         // loop on the files of item and delete the ones we will generate here
@@ -73,7 +74,6 @@ class Bookmeka_CsvJob extends Omeka_Job_AbstractJob
           if(!isset(BookmekaPlugin::$extensions[$pathinfo['extension']])) continue;
           $loopfile->delete();
         }
-        _log('Bookmeka_CsvJob, update #'.$fetch['item'].': '.$row[0]);
       }
       // create an item
       else {

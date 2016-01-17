@@ -534,7 +534,7 @@ DROP TABLE IF EXISTS `{$this->_table}`
       }
       $csvpath = $file['tmp_name'];
       $csvname = $file['name'];
-      // needed to avoid a bug from D:\www\omeka\application\libraries\Omeka\File\MimeType\Detect\Strategy\Browser.php on line 23
+      // needed to avoid a bug from omeka/application/libraries/Omeka/File/MimeType/Detect/Strategy/Browser.php on line 23
       unset($_FILES['bookmeka_csv']);
       _log("sendLongRunning Bookmeka_CsvJob");
       try {
