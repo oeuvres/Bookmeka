@@ -165,7 +165,9 @@ DROP TABLE IF EXISTS `{$this->_table}`
     else ini_set("xsl.security_prefs",  $prefs);
     $this->_xsl = new DOMDocument();
   }
-  public function fileDisplay($file, $options=array(), $wrapperAttributes = array()) {
+  
+  public function fileDisplay($file, $options=array(), $wrapperAttributes = array())
+  {
     $url = file_display_url($file, $format='original');
     $label = $file->getExtension();
     if ($file->mime_type == self::MIME_TEI) $label = "tei";
@@ -433,7 +435,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
    * If one file is deleted, do nothing, user may want to keep only 
    * some formats (for example, no public xml/tei)
    */
-  public function hookBeforeDeleteFile($args) {
+  public function hookBeforeDeleteFile($args)
+  {
     
     
   }
@@ -579,7 +582,8 @@ DROP TABLE IF EXISTS `{$this->_table}`
   /**
    * Show item, table of contents, and subitems
    */
-  function hookPublicItemsShow($args) {
+  function hookPublicItemsShow($args)
+  {
     $db = $this->_db;
     $item = $args['item'];
     $itemid = $db->quote($item->id);
@@ -592,12 +596,20 @@ DROP TABLE IF EXISTS `{$this->_table}`
     while ($row = $result->fetch()) {
       echo $row['html'];
     }
-     
+  }
+  /**
+   * Add SimplePagesPage as a searchable type.
+   */
+  function filterSearchRecordTypes($recordTypes)
+  {
+      $recordTypes['SimplePagesPage'] = __('Simple Page');
+      return $recordTypes;
   }
   /**
    * For specific theme, deliver Bookmeka object
    */
-  static function toc($args) {
+  static function toc($args)
+  {
     // echo json_encode($args, JSON_FORCE_OBJECT|JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE);
   }
 }
