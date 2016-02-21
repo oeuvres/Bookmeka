@@ -27,7 +27,8 @@ Pull from github
 # update Bookmeka root
 $ git pull
 # update submodule
-$ git submodule foreach --recursive git pull
+$ git pull --recurse-submodules
+$ git submodule update --remote --recursive
 ```
 
 Push to github
